@@ -58,11 +58,11 @@ jobs:
           mv dist ni-plotly-panel
           zip plotly-panel.zip ni-plotly-panel -r
 
-      # - name: (Release) Publish to Artifactory
-      #   if: github.event_name == 'push'
-      #   run: |
-      #     curl -H "Authorization:Bearer ${{ secrets.NIARTIFACTS_TOKEN }}" -T plotly-panel.zip "https://niartifacts.jfrog.io/artifactory/rnd-generic-ci/ni/systemlink/plotly-panel/latest.zip"
-      #     curl -H "Authorization:Bearer ${{ secrets.NIARTIFACTS_TOKEN }}" -T plotly-panel.zip "https://niartifacts.jfrog.io/artifactory/rnd-generic-ci/ni/systemlink/plotly-panel/${{ env.PLUGIN_VERSION }}.zip"
+      - name: (Release) Publish to Artifactory
+        if: github.event_name == 'push'
+        run: |
+          curl -H "Authorization:Bearer ${{ secrets.NIARTIFACTS_TOKEN }}" -T plotly-panel.zip "https://niartifacts.jfrog.io/artifactory/rnd-generic-ci/ni/systemlink/plotly-panel/latest.zip"
+          curl -H "Authorization:Bearer ${{ secrets.NIARTIFACTS_TOKEN }}" -T plotly-panel.zip "https://niartifacts.jfrog.io/artifactory/rnd-generic-ci/ni/systemlink/plotly-panel/${{ env.PLUGIN_VERSION }}.zip"
 
       - name: (Release) Run semantic-release
         if: github.event_name == 'push'
