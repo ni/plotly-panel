@@ -4,23 +4,18 @@ import {
   DataFrame,
   FieldType,
   Field,
-  GrafanaTheme,
   getFieldDisplayName,
-  getColorForTheme,
-  getFieldColorModeForField,
+  getFieldSeriesColor,
+  GrafanaTheme2,
+  hasLinks,
+  dateTimeParse,
 } from '@grafana/data';
 import { AxisLabels, PanelOptions } from 'types';
-import { useTheme, ContextMenu, MenuItemsGroup, linkModelToContextMenuItems, getTheme } from '@grafana/ui';
-import { getTemplateSrv } from '@grafana/runtime';
-import { getGuid } from 'utils';
-
-import Plot from 'react-plotly.js';
-import { AxisType, Legend, PlotData, PlotType } from 'plotly.js';
-import isEqual from 'lodash/isEqual';
-import union from 'lodash/union';
-import flatten from 'lodash/flatten';
-import max from 'lodash/max';
-import min from 'lodash/min';
+import { useTheme2, ContextMenu, MenuItemsGroup, linkModelToContextMenuItems } from '@grafana/ui';
+import { getTemplateSrv, PanelDataErrorView } from '@grafana/runtime';
+import { getFieldsByName, notEmpty, Plot, renderMenuItems } from 'utils';
+import { AxisType, Legend, PlotData, PlotType } from 'plotly.js-basic-dist-min';
+import _ from 'lodash';
 
 interface MenuState {
   x: number;
@@ -34,41 +29,43 @@ interface Props extends PanelProps<PanelOptions> {}
 export const PlotlyPanel: React.FC<Props> = (props) => {
   const { data, width, height, options } = props;
   const [menu, setMenu] = useState<MenuState>({ x: 0, y: 0, show: false, items: [] });
-  const theme = useTheme();
-  const plotData: Plotly.Data[] = [];
+  const theme = useTheme2();
+  const plotData: Array<Partial<PlotData>> = [];
   const axisLabels: AxisLabels = {
     xAxis: '',
     yAxis: [],
     yAxis2: [],
   };
 
-  var seriesIndex = 0;
-  for (const dataframe of data.series) {
-    if (dataframe.fields.length < 2) {
-      throw new Error(`Series '${dataframe.refId}' must contain at least 2 fields.`);
-    }
+  const xFields = _.attempt(() => getXFields(data.series, options.xAxis.field));
+  if (_.isError(xFields)) {
+    return renderErrorView(props, xFields.message);
+  }
+
+  axisLabels.xAxis = _(xFields).map('name').uniq().join(',');
+
+  for (let i = 0; i < data.series.length; i++) {
+    const dataframe = data.series[i];
+    const xField = xFields[i];
 
     setDataFrameId(dataframe);
-    const { xField, yFields, yFields2 } = getFields(dataframe, props);
-    if (!axisLabels.xAxis && xField) {
-      // If frames have different x-fields, the first one will show on the graph
-      axisLabels.xAxis = (xField as Field).name;
-    }
 
-    for (const yField of yFields || []) {
-      const yName = getFieldDisplayName(yField as Field, dataframe, data.series);
+    const { yFields, yFields2 } = getYFields(dataframe, xField, options.yAxis.fields, options.yAxis2?.fields);
+
+    for (const yField of yFields) {
+      const yName = getFieldDisplayName(yField, dataframe, data.series);
       const plotlyXAxisField = options.displayVertically ? xField : yField;
       const plotlyYAxisField = options.displayVertically ? yField : xField;
-      axisLabels.yAxis = union(axisLabels.yAxis, [(yField as Field).name]);
+      axisLabels.yAxis = _.union(axisLabels.yAxis, [(yField).name]);
       plotData.push({
-        x: plotlyXAxisField ? getFieldValues(plotlyXAxisField as Field) : [],
-        y: plotlyYAxisField ? getFieldValues(plotlyYAxisField as Field) : [],
+        x: plotlyXAxisField ? getFieldValues(plotlyXAxisField) : [],
+        y: plotlyYAxisField ? getFieldValues(plotlyYAxisField) : [],
         name: yName,
         ...getModeAndType(options.series.plotType),
         fill: options.series.areaFill && options.series.plotType === 'line' ? 'tozeroy' : 'none',
         marker: {
           size: options.series.markerSize,
-          color: getColor(yField as Field, seriesIndex++),
+          color: getFieldSeriesColor(yField, theme).color,
         },
         line: {
           width: options.series.lineWidth,
@@ -80,14 +77,14 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
     }
 
     if (yFields2 && props.options.showYAxis2) {
-      for (const yField2 of yFields2 || []) {
-        const yName = getFieldDisplayName(yField2 as Field, dataframe, data.series);
+      for (const yField2 of yFields2) {
+        const yName = getFieldDisplayName(yField2, dataframe, data.series);
         const plotlyXAxisField = options.displayVertically ? xField : yField2;
         const plotlyYAxisField = options.displayVertically ? yField2 : xField;
-        axisLabels.yAxis2 = union(axisLabels.yAxis2, [(yField2 as Field).name]);
+        axisLabels.yAxis2 = _.union(axisLabels.yAxis2, [(yField2).name]);
         plotData.push({
-          x: plotlyXAxisField ? getFieldValues(plotlyXAxisField as Field) : [],
-          y: plotlyYAxisField ? getFieldValues(plotlyYAxisField as Field) : [],
+          x: plotlyXAxisField ? getFieldValues(plotlyXAxisField) : [],
+          y: plotlyYAxisField ? getFieldValues(plotlyYAxisField) : [],
           xaxis: options.displayVertically ? 'x' : 'x2',
           yaxis: options.displayVertically ? 'y2' : 'y',
           name: yName,
@@ -95,7 +92,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
           fill: options.series2.areaFill && options.series2.plotType === 'line' ? 'tozeroy' : 'none',
           marker: {
             size: options.series2.markerSize,
-            color: getColor(yField2 as Field, seriesIndex++),
+            color: getFieldSeriesColor(yField2, theme).color,
           },
           line: {
             width: options.series2.lineWidth,
@@ -108,19 +105,6 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
     }
   }
 
-  if (
-    axisLabels.xAxis !== props.options.xAxis.field ||
-    !isEqual(axisLabels.yAxis, props.options.yAxis.fields) ||
-    !isEqual(axisLabels.yAxis2, props.options.yAxis2?.fields)
-  ) {
-    props.onOptionsChange({
-      ...props.options,
-      xAxis: { ...props.options.xAxis, field: axisLabels.xAxis },
-      yAxis: { ...props.options.yAxis, fields: axisLabels.yAxis },
-      yAxis2: { ...props.options.yAxis2, fields: axisLabels.yAxis2 },
-    });
-  }
-
   const handlePlotClick = (plotEvent: Readonly<Plotly.PlotMouseEvent>) => {
     const point = plotEvent.points[0];
     const [id] = point.data.customdata;
@@ -131,7 +115,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
 
     const field = frame.fields.find((field) => point.data.name === getFieldDisplayName(field, frame, data.series));
 
-    if (!field || !field.getLinks) {
+    if (!field?.getLinks || !hasLinks(field)) {
       return;
     }
 
@@ -142,6 +126,19 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
       show: true,
       items: [{ label: 'Data links', items: linkModelToContextMenuItems(() => links) }],
     });
+  };
+
+  const handlePlotRelayout = (event: Readonly<Plotly.PlotRelayoutEvent>) => {
+    const { "xaxis.range[0]": xAxisMin, "xaxis.range[1]": xAxisMax} = event;
+
+    if (typeof xAxisMin === 'string' && typeof xAxisMax === 'string') {
+      const from = dateTimeParse(xAxisMin);
+      const to = dateTimeParse(xAxisMax);
+
+      if (from.isValid() && to.isValid()) {
+        props.onChangeTimeRange({ from: from.valueOf(), to: to.valueOf() });
+      }
+    }
   };
 
   return (
@@ -155,11 +152,17 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
             plotData.length === 0 || !plotData.find((d) => d.y?.length) ? [{ text: 'No data', showarrow: false }] : [],
           ...getLayout(theme, options, plotData, axisLabels),
         }}
-        config={{ displayModeBar: false }}
+        config={getConfig(options)}
         onClick={handlePlotClick}
+        onRelayout={handlePlotRelayout}
       />
       {menu.show && (
-        <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={() => setMenu({ ...menu, show: false })} />
+        <ContextMenu
+          renderMenuItems={() => renderMenuItems(menu.items)}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu({ ...menu, show: false })}
+        />
       )}
     </div>
   );
@@ -169,54 +172,80 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
 const setDataFrameId = (frame: DataFrame) => {
   if (frame.meta?.custom?.id) {
     return;
-  } else if (frame.meta?.custom) {
-    frame.meta.custom['id'] = getGuid();
-  } else if (frame.meta) {
-    frame.meta.custom = { id: getGuid() };
-  } else {
-    frame.meta = { custom: { id: getGuid() } };
   }
+  _.set(frame, 'meta.custom.id', _.uniqueId());
 };
 
-// Pull out user-selected fields from a DataFrame.
-// If the options aren't set or the fields don't exist, try to pick the first
-// available fields, prioritizing time fields on the X axis.
-const getFields = (frame: DataFrame, props: Props) => {
-  let xField = frame.fields.find((field) => field.name === props.options.xAxis.field);
-  if (!xField) {
-    xField = frame.fields.find((field) => field.type === FieldType.time);
-    if (!xField) {
-      const y = props.options.yAxis.fields || [];
-      xField = frame.fields.find((field) => !y.includes(field.name));
+const getXFields = (frames: DataFrame[], selectedField?: string) => {
+  if (frames.length === 0) {
+    throw Error('No data');
+  } else if (frames.some(frame => frame.fields.length < 2)) {
+    throw Error(`One or more series does not contain at least two fields.`)
+  }
+
+  // If user explicitly picked an X Field, try to grab it from every data frame,
+  // throwing an error if it's missing or the types aren't consistent.
+  if (selectedField) {
+    const fields = getFieldsByName(frames, selectedField);
+
+    if (fields.length !== frames.length) {
+      throw Error('Configured X field is missing in one or more series.');
+    } else if (_(fields).countBy('type').size() > 1) {
+      throw Error('Configured X field is not the same type across every series.');
     }
+
+    return fields;
   }
 
-  let yFields = getYFields(props.options.yAxis.fields, frame, xField);
-  let yFields2;
-  if (props.options.yAxis2?.fields) {
-    yFields2 = getYFields(props.options.yAxis2?.fields, frame, xField, false);
+  // Otherwise, we try to pick fields automatically.
+  const fieldsByType = frames.map(frame => _.groupBy(frame.fields, 'type'));
+
+  // First, look to see if every data frame has a matching time field.
+  const timeField = _.find(fieldsByType[0].time,
+    f => fieldsByType.every(fields => _.some(fields.time, ['name', f.name])));
+
+  if (timeField) {
+    return getFieldsByName(frames, timeField.name);
   }
 
-  return { xField, yFields, yFields2 };
+  // Matching string fields
+  const stringField = _.find(fieldsByType[0].string,
+    f => fieldsByType.every(fields => _.some(fields.string, ['name', f.name])));
+
+  if (stringField) {
+    return getFieldsByName(frames, stringField.name);
+  }
+
+  // Try to find a time field in every frame, even if the names don't match
+  const timeFields = fieldsByType.map(fields => _.first(fields.time)).filter(notEmpty);
+  if (timeFields.length === frames.length) {
+    return timeFields;
+  }
+
+  // Lastly, try matching numeric fields
+  const numberField = _.find(fieldsByType[0].number,
+      f => fieldsByType.every(fields => _.some(fields.number, ['name', f.name])));
+
+  if (numberField) {
+    return getFieldsByName(frames, numberField.name);
+  }
+
+  throw Error('The X field could not be automatically configured.');
 };
 
-const getYFields = (selection: string[], frame: DataFrame, xField: Field | undefined, autoFill = true) => {
-  if (autoFill && (!selection || !selection.length)) {
-    let yField = frame.fields.find((field) => field !== xField && field.type !== FieldType.time);
-    if (!yField) {
-      return [];
-    }
-    return [yField];
-  }
+const getYFields = (frame: DataFrame, xField: Field, selectedYFields: string[] = [], selectedY2Fields: string[] = []) => {
+  // Don't consider X field.
+  const frameFields = _.without(frame.fields, xField);
 
-  let yFields: Field[] = [];
-  for (const yField of selection || []) {
-    let selectedYField = frame.fields.find((field) => field.name === yField);
-    if (selectedYField) {
-      yFields.push(selectedYField);
-    }
-  }
-  return yFields;
+  const yFields = selectedYFields.length ?
+    frameFields.filter(f => selectedYFields.includes(f.name)) :
+    frameFields.filter(f => f.type === FieldType.number); // If not configured, select all numeric fields.
+
+  const yFields2 = selectedY2Fields.length ?
+    frame.fields.filter(f => selectedY2Fields.includes(f.name)) :
+    [];
+
+  return { yFields, yFields2 };
 };
 
 const getModeAndType = (type: string) => {
@@ -230,36 +259,10 @@ const getModeAndType = (type: string) => {
   }
 };
 
-const getColor = (field: Field, seriesIndex: number) => {
-  const colorMode = getFieldColorModeForField(field);
-  if (colorMode.colors) {
-    return colorMode.colors[seriesIndex];
-  }
-
-  if (field?.config.color && field?.config.color.fixedColor) {
-    return getPlotlyColor(field?.config.color.fixedColor);
-  }
-
-  return;
-};
-
-const getPlotlyColor = (grafanaColor: string) => {
-  if (!grafanaColor) {
-    // Let plotly choose
-    return;
-  }
-
-  if (grafanaColor.startsWith('rgb')) {
-    return grafanaColor;
-  }
-
-  return getColorForTheme(grafanaColor, getTheme());
-};
-
 const getFieldValues = (field: Field) => {
   if (field.type === FieldType.time) {
     return field.values.toArray().map((value) => {
-      return typeof value === 'number' ? new Date(value).toISOString() : value;
+      return typeof value === 'number' ? new Date(value) : value;
     });
   } else {
     return field.values.toArray();
@@ -267,28 +270,30 @@ const getFieldValues = (field: Field) => {
 };
 
 const getRange = (minimum: number | undefined, maximum: number | undefined, axisData: any[]) => {
-  const data = flatten(axisData);
+  const data = _.flatten(axisData);
   if (minimum !== undefined) {
     if (maximum !== undefined) {
       return [minimum, maximum];
     }
 
-    return [minimum, Math.ceil(max(data))];
+    return [minimum, Math.ceil(_.max(data))];
   }
 
   if (maximum !== undefined) {
-    return [Math.floor(min(data)), maximum];
+    return [Math.floor(_.min(data)), maximum];
   }
 
   return;
 };
 
-const getLayout = (
-  theme: GrafanaTheme,
-  options: PanelOptions,
-  data: Array<Partial<PlotData>>,
-  axisLabels: AxisLabels
-) => {
+const getConfig = (options: PanelOptions): Partial<Plotly.Config> => ({
+  displayModeBar: options.showModeBar ? 'hover' : false,
+  displaylogo: false,
+  showTips: false,
+  modeBarButtonsToRemove: ['toImage']
+});
+
+const getLayout = (theme: GrafanaTheme2, options: PanelOptions, data: Array<Partial<PlotData>>, axisLabels: AxisLabels) => {
   const originalAxisTitleX = getTemplateSrv().replace(options.xAxis.title) || axisLabels.xAxis;
   const originalAxisTitleY = getTemplateSrv().replace(options.yAxis.title) || axisLabels.yAxis.join(', ');
   const xAxisOptions = options.displayVertically ? options.xAxis : options.yAxis;
@@ -299,11 +304,13 @@ const getLayout = (
   const showYAxis2 = options.showYAxis2 && options.displayVertically;
   const layout: Partial<Plotly.Layout> = {
     margin: { r: 40, l: 40, t: 20, b: 40 },
-    paper_bgcolor: theme.colors.panelBg,
-    plot_bgcolor: theme.colors.panelBg,
-    font: { color: theme.colors.text },
+    paper_bgcolor: theme.components.panel.background,
+    plot_bgcolor: theme.components.panel.background,
+    font: {
+      color: theme.colors.text.primary,
+      family: theme.typography.fontFamily,
+    },
     xaxis: {
-      fixedrange: true,
       automargin: true,
       title: xAxisTitle,
       range: getRange(
@@ -314,9 +321,9 @@ const getLayout = (
       type: xAxisOptions.scale as AxisType,
       tickformat: xAxisOptions.decimals ? `.${xAxisOptions.decimals}f` : '',
       ticksuffix: xAxisOptions.unit ? ` ${xAxisOptions.unit}` : '',
+      zeroline: false,
     },
     xaxis2: {
-      fixedrange: true,
       visible: showXAxis2,
       automargin: true,
       overlaying: 'x',
@@ -330,6 +337,7 @@ const getLayout = (
       type: options.yAxis2?.scale as AxisType,
       tickformat: options.yAxis2?.decimals ? `.${options.yAxis2?.decimals}f` : '',
       ticksuffix: options.yAxis2?.unit ? ` ${getTemplateSrv().replace(options.yAxis2?.unit)}` : '',
+      zeroline: false,
     },
     yaxis: {
       fixedrange: true,
@@ -344,6 +352,7 @@ const getLayout = (
       tickformat: yAxisOptions.decimals ? `.${yAxisOptions.decimals}f` : '',
       ticksuffix: yAxisOptions.unit ? ` ${getTemplateSrv().replace(options.yAxis.unit)}` : '',
       autorange: shouldInvertVerticalAxis(options) ? 'reversed' : undefined,
+      zeroline: false,
     },
     yaxis2: {
       fixedrange: true,
@@ -360,6 +369,7 @@ const getLayout = (
       type: options.yAxis2?.scale as AxisType,
       tickformat: options.yAxis2?.decimals ? `.${options.yAxis2?.decimals}f` : '',
       ticksuffix: options.yAxis2?.unit ? ` ${getTemplateSrv().replace(options.yAxis2?.unit)}` : '',
+      zeroline: false,
     },
     showlegend: options.showLegend,
     legend: getLegendLayout(options.legendPosition, showYAxis2, !!xAxisOptions.title),
@@ -391,4 +401,8 @@ const getLegendLayout = (position: string, showYAxis2: boolean, showXAxisLabel: 
 
 const shouldInvertVerticalAxis = (options: PanelOptions) => {
   return options.displayVertically === false && options.invertXAxis;
+};
+
+const renderErrorView = (props: Props, message: string) => {
+  return <PanelDataErrorView panelId={props.id} data={props.data} message={message}></PanelDataErrorView>
 };

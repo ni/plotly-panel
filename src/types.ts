@@ -1,10 +1,11 @@
 export interface PanelOptions {
   xAxis: XAxisOptions;
   yAxis: YAxisOptions;
-  yAxis2?: YAxisOptions;
+  yAxis2: YAxisOptions;
   showYAxis2: boolean;
   showLegend: boolean;
   legendPosition: string;
+  showModeBar: boolean;
   displayVertically: boolean;
   invertXAxis: boolean;
   series: SeriesOptions;
@@ -21,7 +22,7 @@ export interface AxisOptions {
 }
 
 export interface XAxisOptions extends AxisOptions {
-  field: string;
+  field?: string;
 }
 
 export interface YAxisOptions extends AxisOptions {
@@ -41,9 +42,4 @@ export interface AxisLabels {
   xAxis: string;
   yAxis: string[];
   yAxis2: string[];
-}
-
-export interface FieldOption {
-  value: string;
-  label: string;
 }

@@ -1,19 +1,22 @@
-import { PanelPlugin, FieldOverrideContext, FieldConfigProperty, FieldColorModeId } from '@grafana/data';
-import { PanelOptions, FieldOption } from './types';
+import {
+  PanelPlugin,
+  FieldOverrideContext,
+  FieldConfigProperty,
+  FieldColorModeId,
+  SelectableValue,
+  SelectFieldConfigSettings,
+} from '@grafana/data';
+import { getFieldTypeIcon } from '@grafana/ui';
+import { PanelOptions } from './types';
 import { PlotlyPanel } from './PlotlyPanel';
-import { MultiSelectValueEditor } from './MultiSelect';
 
 export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
   .setPanelOptions((builder) => {
     return builder
-      .addSelect({
+      .addFieldNamePicker({
         path: 'xAxis.field',
         name: 'Field',
-        settings: {
-          options: [],
-          getOptions: getFieldOptions,
-        },
-        defaultValue: '',
+        settings: { placeholderText: 'Auto' },
         category: ['X Axis'],
       })
       .addTextInput({
@@ -21,7 +24,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         name: 'Label',
         defaultValue: '',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['X Axis'],
       })
@@ -39,7 +42,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'xAxis.min',
         name: 'Min',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['X Axis'],
       })
@@ -47,7 +50,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'xAxis.max',
         name: 'Max',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['X Axis'],
       })
@@ -55,7 +58,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'xAxis.decimals',
         name: 'Decimals',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
           min: 0,
         },
         category: ['X Axis'],
@@ -66,16 +69,13 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         defaultValue: '',
         category: ['X Axis'],
       })
-      .addCustomEditor({
+      .addMultiSelect<string, SelectFieldConfigSettings<string>>({
         path: 'yAxis.fields',
-        editor: MultiSelectValueEditor as any,
+        name: 'Field',
         settings: {
           options: [],
-          getOptions: getFieldOptions,
+          getOptions: (context) => getFieldOptions(context, (context.options as PanelOptions)?.yAxis.fields),
         },
-        name: 'Field',
-        id: 'yAxisField',
-        defaultValue: [],
         category: ['Y Axis'],
       })
       .addTextInput({
@@ -83,7 +83,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         name: 'Label',
         defaultValue: '',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['Y Axis'],
       })
@@ -101,7 +101,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis.min',
         name: 'Min',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['Y Axis'],
       })
@@ -109,7 +109,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis.max',
         name: 'Max',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         category: ['Y Axis'],
       })
@@ -117,7 +117,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis.decimals',
         name: 'Decimals',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
           min: 0,
         },
         category: ['Y Axis'],
@@ -165,7 +165,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
       .addNumberInput({
         path: 'series.lineWidth',
         name: 'Line width',
-        defaultValue: 2,
+        defaultValue: 1,
         settings: {
           min: 1,
         },
@@ -188,16 +188,14 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         defaultValue: false,
         category: ['Secondary Y Axis'],
       })
-      .addCustomEditor({
+      .addMultiSelect<string, SelectFieldConfigSettings<string>>({
         path: 'yAxis2.fields',
-        editor: MultiSelectValueEditor as any,
         settings: {
           options: [],
-          getOptions: getFieldOptions,
+          getOptions: (context) => getFieldOptions(context, (context.options as PanelOptions)?.yAxis2.fields),
+          allowCustomValue: true,
         },
         name: 'Field',
-        id: 'yAxis2Field',
-        defaultValue: [],
         showIf: (options) => options.showYAxis2,
         category: ['Secondary Y Axis'],
       })
@@ -206,7 +204,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         name: 'Label',
         defaultValue: '',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         showIf: (options) => options.showYAxis2,
         category: ['Secondary Y Axis'],
@@ -226,7 +224,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis2.min',
         name: 'Min',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         showIf: (options) => options.showYAxis2,
         category: ['Secondary Y Axis'],
@@ -235,7 +233,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis2.max',
         name: 'Max',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
         },
         showIf: (options) => options.showYAxis2,
         category: ['Secondary Y Axis'],
@@ -244,7 +242,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         path: 'yAxis2.decimals',
         name: 'Decimals',
         settings: {
-          placeholder: 'auto',
+          placeholder: 'Auto',
           min: 0,
         },
         showIf: (options) => options.showYAxis2,
@@ -295,7 +293,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
       .addNumberInput({
         path: 'series2.lineWidth',
         name: 'Line width',
-        defaultValue: 2,
+        defaultValue: 1,
         settings: {
           min: 1,
         },
@@ -328,6 +326,11 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
         },
         defaultValue: 'right',
       })
+      .addBooleanSwitch({
+        path: 'showModeBar',
+        name: 'Show plot tools',
+        defaultValue: false,
+      })
       .addRadio({
         path: 'displayVertically',
         name: 'Orientation',
@@ -350,7 +353,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
     standardOptions: {
       [FieldConfigProperty.Color]: {
         settings: {
-          byValueSupport: false,
+          byValueSupport: true,
           bySeriesSupport: true,
           preferThresholdsMode: false,
         },
@@ -360,7 +363,6 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
       },
     },
     disableStandardOptions: [
-      FieldConfigProperty.Thresholds,
       FieldConfigProperty.Min,
       FieldConfigProperty.Max,
       FieldConfigProperty.NoValue,
@@ -369,8 +371,8 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
     ],
   });
 
-const getFieldOptions = async (context: FieldOverrideContext) => {
-  const options: FieldOption[] = [];
+const getFieldOptions = async (context: FieldOverrideContext, selectedFields: string[] = []) => {
+  const options: Array<SelectableValue<string>> = [];
   if (context && context.data) {
     for (const frame of context.data) {
       if (frame.fields.length < 2) {
@@ -378,15 +380,23 @@ const getFieldOptions = async (context: FieldOverrideContext) => {
       }
       for (const field of frame.fields) {
         if (!options.find((o) => o.label === field.name)) {
-          options.push({ value: field.name, label: field.name });
+          options.push({ value: field.name, label: field.name, icon: getFieldTypeIcon(field) });
         }
       }
     }
   }
+
+  // Add user selected fields, even if they're not part of the data.
+  for (const fieldName of selectedFields) {
+    if (!options.find(o => o.value === fieldName)) {
+      options.push({ value: fieldName, label: `${fieldName} (not found)` });
+    }
+  }
+
   return options;
 };
 
-const getScaleOptions = async (context: FieldOverrideContext) => {
+const getScaleOptions = async (_: FieldOverrideContext) => {
   return [
     { value: '', label: 'Auto' },
     { value: 'linear', label: 'Linear' },
