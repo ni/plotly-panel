@@ -13,18 +13,19 @@
   "author": "NI",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@grafana/data": "^7.5.3",
-    "@grafana/runtime": "^7.5.3",
-    "@grafana/toolkit": "^7.5.3",
-    "@grafana/ui": "^7.5.3",
+    "@grafana/data": "^9.0.0",
+    "@grafana/runtime": "^9.0.0",
+    "@grafana/toolkit": "^9.0.0",
+    "@grafana/ui": "^9.0.0",
+    "@semantic-release/git": "^10.0.1",
     "@types/lodash": "^4.14.168",
+    "@types/plotly.js-basic-dist-min": "^2.12.0",
     "@types/react-plotly.js": "^2.2.4",
-    "emotion": "10.0.27",
-    "plotly.js": "^1.58.4",
-    "react-plotly.js": "^2.5.1",
     "edit-json-file": "^1.7.0",
-    "semantic-release": "^19.0.2",
-    "@semantic-release/git": "^10.0.1"
+    "emotion": "10.0.27",
+    "plotly.js-basic-dist-min": "^2.13.3",
+    "react-plotly.js": "^2.5.1",
+    "semantic-release": "^19.0.2"
   },
   "engines": {
     "node": ">=14"
