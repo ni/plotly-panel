@@ -353,7 +353,7 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
     standardOptions: {
       [FieldConfigProperty.Color]: {
         settings: {
-          byValueSupport: true,
+          byValueSupport: false,
           bySeriesSupport: true,
           preferThresholdsMode: false,
         },
@@ -368,6 +368,9 @@ export const plugin = new PanelPlugin<PanelOptions>(PlotlyPanel)
       FieldConfigProperty.NoValue,
       FieldConfigProperty.Decimals,
       FieldConfigProperty.Mappings,
+      FieldConfigProperty.Thresholds,
+      FieldConfigProperty.Unit,
+      FieldConfigProperty.DisplayName,
     ],
   });
 

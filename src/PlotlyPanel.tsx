@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   PanelProps,
   DataFrame,
   FieldType,
   Field,
   getFieldDisplayName,
-  getFieldSeriesColor,
   GrafanaTheme2,
   hasLinks,
   dateTimeParse,
+  FieldColorModeId
 } from '@grafana/data';
 import { AxisLabels, PanelOptions } from 'types';
 import { useTheme2, ContextMenu, MenuItemsGroup, linkModelToContextMenuItems } from '@grafana/ui';
@@ -30,6 +30,11 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
   const { data, width, height, options } = props;
   const [menu, setMenu] = useState<MenuState>({ x: 0, y: 0, show: false, items: [] });
   const theme = useTheme2();
+
+  const traceColors = useMemo(() => {
+    return theme.visualization.palette.map(theme.visualization.getColorByName);
+  }, [theme]);
+
   const plotData: Array<Partial<PlotData>> = [];
   const axisLabels: AxisLabels = {
     xAxis: '',
@@ -65,7 +70,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
         fill: options.series.areaFill && options.series.plotType === 'line' ? 'tozeroy' : 'none',
         marker: {
           size: options.series.markerSize,
-          color: getFieldSeriesColor(yField, theme).color,
+          color: getFixedColor(yField, theme)
         },
         line: {
           width: options.series.lineWidth,
@@ -92,7 +97,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
           fill: options.series2.areaFill && options.series2.plotType === 'line' ? 'tozeroy' : 'none',
           marker: {
             size: options.series2.markerSize,
-            color: getFieldSeriesColor(yField2, theme).color,
+            color: getFixedColor(yField2, theme)
           },
           line: {
             width: options.series2.lineWidth,
@@ -129,7 +134,16 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
   };
 
   const handlePlotRelayout = (event: Readonly<Plotly.PlotRelayoutEvent>) => {
-    const { "xaxis.range[0]": xAxisMin, "xaxis.range[1]": xAxisMax} = event;
+    const { "xaxis.range[0]": xAxisMin, "xaxis.range[1]": xAxisMax, "xaxis.autorange": autoRange } = event;
+
+    if (autoRange) {
+      props.onOptionsChange({...options, xAxis: { ...options.xAxis, min: undefined, max: undefined }});
+      return;
+    }
+
+    if (!xAxisMin || !xAxisMax) {
+      return;
+    }
 
     if (typeof xAxisMin === 'string' && typeof xAxisMax === 'string') {
       const from = dateTimeParse(xAxisMin);
@@ -137,7 +151,10 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
 
       if (from.isValid() && to.isValid()) {
         props.onChangeTimeRange({ from: from.valueOf(), to: to.valueOf() });
+        props.onOptionsChange({...options, xAxis: { ...options.xAxis, min: from.valueOf(), max: to.valueOf() } });
       }
+    } else {
+      props.onOptionsChange({...options, xAxis: { ...options.xAxis, min: xAxisMin, max: xAxisMax } });
     }
   };
 
@@ -150,7 +167,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
           height,
           annotations:
             plotData.length === 0 || !plotData.find((d) => d.y?.length) ? [{ text: 'No data', showarrow: false }] : [],
-          ...getLayout(theme, options, plotData, axisLabels),
+          ...getLayout(theme, traceColors, options, plotData, axisLabels),
         }}
         config={getConfig(options)}
         onClick={handlePlotClick}
@@ -248,6 +265,14 @@ const getYFields = (frame: DataFrame, xField: Field, selectedYFields: string[] =
   return { yFields, yFields2 };
 };
 
+const getFixedColor = (field: Field, theme: GrafanaTheme2) => {
+  if (!field.config.color?.fixedColor || field.config.color.mode !== FieldColorModeId.Fixed) {
+    return;
+  }
+
+  return theme.visualization.getColorByName(field.config.color.fixedColor);
+};
+
 const getModeAndType = (type: string) => {
   switch (type) {
     case 'line':
@@ -290,10 +315,9 @@ const getConfig = (options: PanelOptions): Partial<Plotly.Config> => ({
   displayModeBar: options.showModeBar ? 'hover' : false,
   displaylogo: false,
   showTips: false,
-  modeBarButtonsToRemove: ['toImage']
 });
 
-const getLayout = (theme: GrafanaTheme2, options: PanelOptions, data: Array<Partial<PlotData>>, axisLabels: AxisLabels) => {
+const getLayout = (theme: GrafanaTheme2, traceColors: string[], options: PanelOptions, data: Array<Partial<PlotData>>, axisLabels: AxisLabels) => {
   const originalAxisTitleX = getTemplateSrv().replace(options.xAxis.title) || axisLabels.xAxis;
   const originalAxisTitleY = getTemplateSrv().replace(options.yAxis.title) || axisLabels.yAxis.join(', ');
   const xAxisOptions = options.displayVertically ? options.xAxis : options.yAxis;
@@ -303,6 +327,7 @@ const getLayout = (theme: GrafanaTheme2, options: PanelOptions, data: Array<Part
   const showXAxis2 = options.showYAxis2 && !options.displayVertically;
   const showYAxis2 = options.showYAxis2 && options.displayVertically;
   const layout: Partial<Plotly.Layout> = {
+    colorway: traceColors,
     margin: { r: 40, l: 40, t: 20, b: 40 },
     paper_bgcolor: theme.components.panel.background,
     plot_bgcolor: theme.components.panel.background,
