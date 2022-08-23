@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   PanelProps,
   DataFrame,
@@ -13,8 +13,9 @@ import {
 import { AxisLabels, PanelOptions } from 'types';
 import { useTheme2, ContextMenu, MenuItemsGroup, linkModelToContextMenuItems } from '@grafana/ui';
 import { getTemplateSrv, PanelDataErrorView } from '@grafana/runtime';
-import { getFieldsByName, notEmpty, Plot, renderMenuItems } from 'utils';
-import { AxisType, Legend, PlotData, PlotType } from 'plotly.js-basic-dist-min';
+import { getFieldsByName, notEmpty, Plot, renderMenuItems, useTraceColors } from 'utils';
+import { AxisType, Legend, PlotData, PlotType, toImage, Icons, PlotlyHTMLElement } from 'plotly.js-basic-dist-min';
+import { saveAs } from 'file-saver';
 import _ from 'lodash';
 
 interface MenuState {
@@ -31,9 +32,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
   const [menu, setMenu] = useState<MenuState>({ x: 0, y: 0, show: false, items: [] });
   const theme = useTheme2();
 
-  const traceColors = useMemo(() => {
-    return theme.visualization.palette.map(theme.visualization.getColorByName);
-  }, [theme]);
+  const traceColors = useTraceColors(theme);
 
   const plotData: Array<Partial<PlotData>> = [];
   const axisLabels: AxisLabels = {
@@ -158,6 +157,9 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
     }
   };
 
+  const handleImageDownload = (gd: PlotlyHTMLElement) =>
+    toImage(gd, { format: 'jpeg', width, height }).then((data) => saveAs(data, props.title));
+
   return (
     <div>
       <Plot
@@ -169,7 +171,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
             plotData.length === 0 || !plotData.find((d) => d.y?.length) ? [{ text: 'No data', showarrow: false }] : [],
           ...getLayout(theme, traceColors, options, plotData, axisLabels),
         }}
-        config={getConfig(options)}
+        config={getConfig(options, handleImageDownload)}
         onClick={handlePlotClick}
         onRelayout={handlePlotRelayout}
       />
@@ -311,8 +313,18 @@ const getRange = (minimum: number | undefined, maximum: number | undefined, axis
   return;
 };
 
-const getConfig = (options: PanelOptions): Partial<Plotly.Config> => ({
+const getConfig = (options: PanelOptions, handleImageDownload: (gd: PlotlyHTMLElement) => void): Partial<Plotly.Config> => ({
   displayModeBar: options.showModeBar ? 'hover' : false,
+  modeBarButtonsToAdd: [
+    {
+      // unique id prevents Plotly from caching the click callback, leading to stale closures
+      name: 'toImageGrafana' + _.uniqueId(),
+      title: 'Download plot as png',
+      icon: Icons.camera,
+      click: handleImageDownload,
+    },
+  ],
+  modeBarButtonsToRemove: ['toImage'],
   displaylogo: false,
   showTips: false,
 });
