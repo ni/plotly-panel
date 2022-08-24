@@ -158,7 +158,7 @@ export const PlotlyPanel: React.FC<Props> = (props) => {
   };
 
   const handleImageDownload = (gd: PlotlyHTMLElement) =>
-    toImage(gd, { format: 'jpeg', width, height }).then((data) => saveAs(data, props.title));
+    toImage(gd, { format: 'png', width, height }).then((data) => saveAs(data, props.title));
 
   return (
     <div>
