@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MenuGroup, MenuItem, MenuItemsGroup } from '@grafana/ui';
 import Plotly from 'plotly.js-basic-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
-import { DataFrame } from '@grafana/data';
+import { DataFrame, GrafanaTheme2 } from '@grafana/data';
 import _ from 'lodash';
 
 export const notEmpty = <TValue,>(value: TValue | null | undefined): value is TValue => {
@@ -25,3 +25,7 @@ export const renderMenuItems = (items: MenuItemsGroup[]) => {
 // Create Plot component with minimized bundle instead of default
 // https://github.com/plotly/react-plotly.js/#customizing-the-plotlyjs-bundle
 export const Plot = createPlotlyComponent(Plotly);
+
+export const useTraceColors = (theme: GrafanaTheme2) => {
+  return useMemo(() => theme.visualization.palette.map(theme.visualization.getColorByName), [theme]);
+};

@@ -18,11 +18,13 @@
     "@grafana/toolkit": "^9.0.0",
     "@grafana/ui": "^9.0.0",
     "@semantic-release/git": "^10.0.1",
+    "@types/file-saver": "^2.0.5",
     "@types/lodash": "^4.14.168",
     "@types/plotly.js-basic-dist-min": "^2.12.0",
     "@types/react-plotly.js": "^2.2.4",
     "edit-json-file": "^1.7.0",
     "emotion": "10.0.27",
+    "file-saver": "^2.0.5",
     "plotly.js-basic-dist-min": "^2.13.3",
     "react-plotly.js": "^2.5.1",
     "semantic-release": "^19.0.2"
